@@ -1,0 +1,291 @@
+{
+  "name": "HabitPulse AI Accountability Coach - Chatbot + Grok + Memory + Gmail",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hi! I’m HabitPulse, your personal habit and fitness accountability coach. Tell me what habit, goal, workout, or progress you want help with.",
+        "options": {}
+      },
+      "id": "hp-chat-trigger",
+      "name": "HabitPulse Chatbot",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1000,
+        -300
+      ],
+      "webhookId": "habitpulse-chatbot"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId || 'habitpulse-chat-session' }}",
+        "contextWindowLength": 10
+      },
+      "id": "hp-chat-memory",
+      "name": "Chatbot Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -650,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "You are HabitPulse, a personal habit and fitness accountability coach. Follow the HabitPulse project principles: simplicity, privacy, positive reinforcement, transparency, and safety. Help users with habit consistency, workouts, steps, water, sleep, goals, streaks, check-ins, and motivation. If a user reports missing 1 day, give a gentle reminder with no guilt. If they report missing 3 or more days, suggest restarting with a smaller/easier version. Celebrate 7-day streaks and meaningful milestones. Avoid medical diagnosis or treatment plans, calorie-restriction advice, extreme dieting, or encouraging over-training. When health concerns require professional advice, clearly recommend consulting a qualified professional. Be supportive, concise, practical, and never shame the user."
+        }
+      },
+      "id": "hp-chat-agent",
+      "name": "HabitPulse Chatbot AI",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -350,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "grok-3-mini",
+        "options": {
+          "baseURL": "https://api.x.ai/v1"
+        }
+      },
+      "id": "hp-grok-chat",
+      "name": "Grok - Chatbot",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -350,
+        -550
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "readStatus": "unread"
+        },
+        "options": {}
+      },
+      "id": "hp-gmail-trigger",
+      "name": "New Gmail from Sender",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $json;\n\nconst sender = email.from?.value?.[0]?.address || email.from || '';\nconst senderName = email.from?.value?.[0]?.name || 'there';\nconst subject = email.subject || 'HabitPulse Message';\nconst body = email.textPlain || email.text || email.snippet || '';\n\nreturn [{\n  json: {\n    sender,\n    senderName,\n    subject,\n    body\n  }\n}];"
+      },
+      "id": "hp-extract-email",
+      "name": "Extract Sender and Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sender }}",
+        "contextWindowLength": 10
+      },
+      "id": "hp-email-memory",
+      "name": "Email Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -350,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Sender name: ' + $json.senderName + '\\nSender email: ' + $json.sender + '\\nSubject: ' + $json.subject + '\\nIncoming message:\\n' + $json.body }}",
+        "options": {
+          "systemMessage": "You are HabitPulse, a personal habit and fitness accountability coach replying to an email. Use the HabitPulse project principles: simplicity, privacy, positive reinforcement, transparency, and safety. Give practical support for habits, workouts, steps, water, sleep, goals, streaks, check-ins, motivation, and weekly-style progress reflection. Use memory to maintain context with this sender. If the sender missed 1 day, give a gentle reminder without guilt. If they missed 3 or more days, suggest restarting with a smaller/easier version. Celebrate 7-day streaks and milestones. Do not provide medical diagnosis or treatment plans, calorie-restriction advice, extreme dieting, or unsafe exercise advice. If the message describes a medical concern, recommend a qualified professional. Return only the reply content, without a subject line, greeting, signature, HTML, or markdown email wrapper."
+        }
+      },
+      "id": "hp-email-agent",
+      "name": "HabitPulse Email Coach",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -50,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "grok-3-mini",
+        "options": {
+          "baseURL": "https://api.x.ai/v1"
+        }
+      },
+      "id": "hp-grok-email",
+      "name": "Grok - Gmail",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -50,
+        50
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $json.output || '';\nconst source = $('Extract Sender and Message').first().json;\n\nfunction escapeHtml(value) {\n  return String(value)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#039;');\n}\n\nconst reply = escapeHtml(aiResponse).replace(/\\n/g, '<br>');\n\nconst html = `<!DOCTYPE html>\n<html>\n<body style=\"margin:0;padding:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#333;\">\n  <div style=\"max-width:680px;margin:30px auto;background:#ffffff;border:1px solid #e2e5e8;border-radius:10px;overflow:hidden;\">\n    <div style=\"background:#2d6cdf;color:#ffffff;padding:22px 28px;\">\n      <div style=\"font-size:22px;font-weight:bold;\">HabitPulse</div>\n      <div style=\"font-size:14px;margin-top:5px;\">Personal Habit &amp; Fitness Accountability Coach</div>\n    </div>\n\n    <div style=\"padding:30px;\">\n      <p style=\"margin-top:0;\">Hi ${escapeHtml(source.senderName)},</p>\n      <p>Thank you for your message. Here is your HabitPulse coaching response:</p>\n\n      <div style=\"background:#f7f9fc;border-left:4px solid #2d6cdf;padding:18px 20px;margin:22px 0;border-radius:5px;line-height:1.7;\">\n        ${reply}\n      </div>\n\n      <p style=\"line-height:1.6;\">\n        Keep your next step small and consistent. You can reply to this email whenever you want to continue the conversation.\n      </p>\n\n      <p style=\"margin-bottom:0;line-height:1.6;\">\n        Best regards,<br>\n        <strong>HabitPulse AI Coach</strong>\n      </p>\n    </div>\n\n    <div style=\"background:#f4f6f8;padding:14px 28px;text-align:center;font-size:12px;color:#777;\">\n      HabitPulse provides general wellness and accountability support, not medical diagnosis or treatment.\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    to: source.sender,\n    subject: source.subject.toLowerCase().startsWith('re:') ? source.subject : 'Re: ' + source.subject,\n    html\n  }\n}];"
+      },
+      "id": "hp-format-email",
+      "name": "Format HabitPulse Gmail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "hp-send-gmail",
+      "name": "Send Gmail to Sender",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "HabitPulse Chatbot": {
+      "main": [
+        [
+          {
+            "node": "HabitPulse Chatbot AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatbot Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "HabitPulse Chatbot AI",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grok - Chatbot": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "HabitPulse Chatbot AI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Gmail from Sender": {
+      "main": [
+        [
+          {
+            "node": "Extract Sender and Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Sender and Message": {
+      "main": [
+        [
+          {
+            "node": "HabitPulse Email Coach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "HabitPulse Email Coach",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grok - Gmail": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "HabitPulse Email Coach",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HabitPulse Email Coach": {
+      "main": [
+        [
+          {
+            "node": "Format HabitPulse Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format HabitPulse Gmail": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail to Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "habitpulse-grok-gmail-v1"
+}

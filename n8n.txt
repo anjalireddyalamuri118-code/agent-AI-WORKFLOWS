@@ -1,0 +1,99 @@
+{
+  "name": "HabitPulse - HTML Form + Groq + Simple Memory",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "habitpulse-coach",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-001",
+      "name": "HabitPulse HTML Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-900,0],
+      "webhookId": "habitpulse-coach-form"
+    },
+    {
+      "parameters": {
+        "jsCode": "const q=$json.query||{}; const b=$json.body||{}; const d={...q,...b}; const name=String(d.name||'User').trim(); const goal=String(d.goal||'').trim(); const habits=String(d.habits||'').trim(); const activity=String(d.activity||'').trim(); const sleep=String(d.sleep||'').trim(); const water=String(d.water||'').trim(); const missed=String(d.missed||'').trim(); const mood=String(d.mood||'').trim(); const userMessage=[`User name: ${name}`,`Main goal: ${goal}`,`Habits: ${habits}`,`Today's activity/workout: ${activity}`,`Sleep: ${sleep}`,`Water intake: ${water}`,`Missed habits/days: ${missed}`,`Mood: ${mood}`].join('\\n'); return [{json:{name,goal,habits,activity,sleep,water,missed,mood,userMessage}}];"
+      },
+      "id": "normalize-001",
+      "name": "Prepare HabitPulse Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-650,0]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.name + '-' + ($json.goal || 'general').toLowerCase().replace(/\\s+/g,'-') }}",
+        "contextWindowLength": 10
+      },
+      "id": "memory-001",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-250,230]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userMessage }}",
+        "options": {
+          "systemMessage": "You are HabitPulse, a supportive personal habit and fitness accountability coach. Keep coaching simple and practical. Encourage consistency, not perfection. Never shame the user for missing a habit. If a habit was missed for 1 day, give a gentle restart message. If habits were missed for 3 or more days, suggest a smaller/easier version. Celebrate meaningful progress when supported by the data. Encourage rest after repeated high-intensity activity. Give general wellness guidance only; do not diagnose, prescribe treatment, or give medical advice. Do not encourage extreme dieting, unsafe exercise, or over-training. Use conversation memory for continuity. Return a concise response with these headings: Today's Check-in, What You're Doing Well, Next Small Step, Encouragement."
+        }
+      },
+      "id": "agent-001",
+      "name": "HabitPulse Groq Coach",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [0,0]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "groq-001",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [-20,-220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$('Prepare HabitPulse Data').first().json; const output=$json.output||$json.text||'No coaching response was generated.'; function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\\"/g,'&quot;').replace(/'/g,'&#039;');} const formatted=esc(output).replace(/^###\\s*(.+)$/gm,'<h3>$1</h3>').replace(/^##\\s*(.+)$/gm,'<h3>$1</h3>').replace(/^#\\s*(.+)$/gm,'<h2>$1</h2>').replace(/\\*\\*(.+?)\\*\\*/g,'<strong>$1</strong>').replace(/\\n/g,'<br>'); const html=`<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>HabitPulse Coach</title><style>body{margin:0;background:#f4f7f6;font-family:Arial;color:#263238}.card{max-width:760px;margin:35px auto;background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08);overflow:hidden}.header{padding:28px;background:#246b4f;color:#fff}.header h1{margin:0 0 6px}.content{padding:28px}.info{background:#f6faf8;border-radius:10px;padding:16px;margin-bottom:22px}.info b{display:inline-block;min-width:125px;margin-bottom:7px}.coach{border-left:5px solid #246b4f;background:#fbfcfc;padding:20px;border-radius:8px;line-height:1.65}.footer{padding:16px 28px;background:#f4f7f6;color:#667;font-size:12px}</style></head><body><div class=\"card\"><div class=\"header\"><h1>HabitPulse</h1><p>Personal Habit & Fitness Accountability Coach</p></div><div class=\"content\"><div class=\"info\"><b>User:</b> ${esc(input.name)}<br><b>Main goal:</b> ${esc(input.goal||'Not provided')}<br><b>Habits:</b> ${esc(input.habits||'Not provided')}<br><b>Activity:</b> ${esc(input.activity||'Not provided')}<br><b>Sleep:</b> ${esc(input.sleep||'Not provided')}<br><b>Water:</b> ${esc(input.water||'Not provided')}<br><b>Missed habits:</b> ${esc(input.missed||'None reported')}<br><b>Mood:</b> ${esc(input.mood||'Not provided')}</div><div class=\"coach\">${formatted}</div></div><div class=\"footer\">HabitPulse provides general wellness and accountability guidance only. It is not a medical diagnosis or treatment service.</div></div></body></html>`; return [{json:{html,output,name:input.name}}];"
+      },
+      "id": "html-001",
+      "name": "Create HTML Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [350,0]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {"responseHeaders":{"entries":[{"name":"Content-Type","value":"text/html; charset=utf-8"}]}}
+      },
+      "id": "response-001",
+      "name": "Return HTML Coach Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [650,0]
+    }
+  ],
+  "connections": {
+    "HabitPulse HTML Input":{"main":[[{"node":"Prepare HabitPulse Data","type":"main","index":0}]]},
+    "Prepare HabitPulse Data":{"main":[[{"node":"HabitPulse Groq Coach","type":"main","index":0}]]},
+    "Simple Memory":{"ai_memory":[[{"node":"HabitPulse Groq Coach","type":"ai_memory","index":0}]]},
+    "Groq Chat Model":{"ai_languageModel":[[{"node":"HabitPulse Groq Coach","type":"ai_languageModel","index":0}]]},
+    "HabitPulse Groq Coach":{"main":[[{"node":"Create HTML Output","type":"main","index":0}]]},
+    "Create HTML Output":{"main":[[{"node":"Return HTML Coach Result","type":"main","index":0}]]}
+  },
+  "pinData": {},
+  "settings":{"executionOrder":"v1"},
+  "active":false,
+  "versionId":"habitpulse-groq-html-memory-v1"
+}
